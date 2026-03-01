@@ -1,0 +1,35 @@
+# 仮想環境
+.venv/
+venv/
+env/
+
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 一時的なデバッグスクリプト
+debug_*.py
+temp_*.py
+scratch_*.py
+
+# SQLite DB（アプリ起動時に自動生成される）
+*.db
+*.sqlite3
+
+# results/ 配下の出力ファイル（生成物のため除外）
+**/results/*
+
+# IDE・エディタ
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 環境変数ファイル
+.env
+.env.*
