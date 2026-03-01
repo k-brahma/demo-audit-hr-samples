@@ -53,7 +53,7 @@ python gui.py
 | `analyze(filepath)` | 上記を統合して結果DataFrameを返す |
 | `save_results(df)` | `results/` にCSV保存 |
 
-## 面接でのアピールポイント
+## 特徴・ポイント
 
 - **業務知識の直接応用：** 36協定の警告ラインを知っているからこそ設定できる閾値
 - **Excelでやっていた作業の自動化** という文脈で説明できる
