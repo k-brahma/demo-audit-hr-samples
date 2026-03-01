@@ -23,6 +23,8 @@ class KPITrackerApp(tk.Tk):
         self.geometry("1060x680")
         self._df = None
         self._analyzed = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -54,10 +56,11 @@ class KPITrackerApp(tk.Tk):
         summary_frame.pack(fill=tk.BOTH, expand=True)
 
         cols = ("KPI名", "カテゴリ", "目標", "実績", "達成率(%)", "ステータス")
+        self._cols = cols
         self._tree = ttk.Treeview(summary_frame, columns=cols, show="headings", height=18)
         widths = [120, 80, 90, 90, 90, 70]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.CENTER)
         self._tree.column("KPI名", anchor=tk.W)
         self._tree.tag_configure("達成", background="#d4edda")
@@ -76,6 +79,51 @@ class KPITrackerApp(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=right)
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._draw_empty_chart()
+
+    _STATUS_ORDER = {"危険": 0, "警告": 1, "達成": 2}
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col in ("目標", "実績"):
+                try:
+                    return int(val.replace(",", ""))
+                except ValueError:
+                    return 0
+            if col == "達成率(%)":
+                try:
+                    return float(val.replace("%", ""))
+                except ValueError:
+                    return 0.0
+            if col == "ステータス":
+                return self._STATUS_ORDER.get(val, 99)
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -122,6 +170,7 @@ class KPITrackerApp(tk.Tk):
                 ),
                 tags=(tag,),
             )
+        self._apply_sort()
 
     def _refresh_chart(self):
         if self._analyzed is None:

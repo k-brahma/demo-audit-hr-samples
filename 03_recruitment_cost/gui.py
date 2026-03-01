@@ -23,6 +23,8 @@ class RecruitmentApp(tk.Tk):
         self.geometry("1040px".replace("px", "")) if False else None
         self.geometry("1040x660")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -54,10 +56,11 @@ class RecruitmentApp(tk.Tk):
         pane.add(left, weight=1)
 
         cols = ("媒体名", "応募数", "採用数", "費用(万円)", "CPA(万円)", "採用率(%)")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=16)
         widths = [150, 70, 70, 100, 100, 90]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.CENTER)
         self._tree.column("媒体名", anchor=tk.W)
         self._tree.tag_configure("best", background="#d4edda")
@@ -74,6 +77,57 @@ class RecruitmentApp(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=right)
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._draw_empty_chart()
+
+    _INT_COLS = {"応募数", "採用数"}
+    _FLOAT_COLS = {"費用(万円)", "採用率(%)"}
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col in self._INT_COLS:
+                try:
+                    return int(val)
+                except ValueError:
+                    return 0
+            if col in self._FLOAT_COLS:
+                try:
+                    return float(val)
+                except ValueError:
+                    return 0.0
+            if col == "CPA(万円)":
+                if val == "採用なし":
+                    return float("inf")
+                try:
+                    return float(val)
+                except ValueError:
+                    return float("inf")
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -106,17 +160,21 @@ class RecruitmentApp(tk.Tk):
 
     def _refresh_tree(self):
         self._tree.delete(*self._tree.get_children())
-        min_cpa = self._df[self._df["採用数"] > 0]["CPA(万円)"].min()
+        hired = self._df[self._df["採用数"] > 0]
+        min_cpa = hired["CPA(万円)"].min() if not hired.empty else None
         for _, row in self._df.iterrows():
-            tag = "best" if row["採用数"] > 0 and row["CPA(万円)"] == min_cpa else ""
+            no_hire = row["採用数"] == 0
+            tag = "best" if not no_hire and row["CPA(万円)"] == min_cpa else ""
+            cpa_display = "採用なし" if no_hire else row["CPA(万円)"]
             self._tree.insert(
                 "", tk.END,
                 values=(
                     row["媒体名"], int(row["応募数"]), int(row["採用数"]),
-                    row["費用(万円)"], row["CPA(万円)"], row["採用率(%)"],
+                    row["費用(万円)"], cpa_display, row["採用率(%)"],
                 ),
                 tags=(tag,),
             )
+        self._apply_sort()
 
     def _refresh_chart(self):
         self._ax.clear()

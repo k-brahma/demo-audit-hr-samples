@@ -29,6 +29,8 @@ class ContractApp(tk.Tk):
         super().__init__()
         self.title("契約書 期限管理ツール")
         self.geometry("1000x660")
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
         self._refresh()
 
@@ -54,11 +56,12 @@ class ContractApp(tk.Tk):
 
         # Treeview
         cols = ("id", "契約名", "相手先", "開始日", "終了日", "カテゴリ", "残日数", "緊急度", "備考")
+        self._cols = cols
         self._tree = ttk.Treeview(self, columns=cols, show="headings", height=26)
         widths = [40, 200, 130, 90, 90, 80, 70, 70, 160]
         anchors = [tk.CENTER, tk.W, tk.W, tk.CENTER, tk.CENTER, tk.CENTER, tk.CENTER, tk.CENTER, tk.W]
         for col, w, a in zip(cols, widths, anchors):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=a)
 
         for tag, bg in ROW_COLORS.items():
@@ -68,6 +71,56 @@ class ContractApp(tk.Tk):
         self._tree.configure(yscrollcommand=vsb.set)
         self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0), pady=4)
         vsb.pack(side=tk.RIGHT, fill=tk.Y, pady=4, padx=(0, 8))
+
+    _URGENCY_ORDER = {"期限切れ": 0, "危険": 1, "警告": 2, "正常": 3}
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "id":
+                try:
+                    return int(val)
+                except ValueError:
+                    return 0
+            if col == "残日数":
+                if val.startswith("超過"):
+                    try:
+                        return -int(val.replace("超過", "").replace("日", ""))
+                    except ValueError:
+                        return 0
+                try:
+                    return int(val.replace("日", ""))
+                except ValueError:
+                    return 0
+            if col == "緊急度":
+                return self._URGENCY_ORDER.get(val, 99)
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _refresh(self):
         self._tree.delete(*self._tree.get_children())
@@ -89,6 +142,7 @@ class ContractApp(tk.Tk):
             f"期限切れ/危険:{counts.get('期限切れ',0)+counts.get('危険',0)}件  "
             f"警告:{counts.get('警告',0)}件  正常:{counts.get('正常',0)}件"
         )
+        self._apply_sort()
 
     def _selected_id(self):
         sel = self._tree.selection()

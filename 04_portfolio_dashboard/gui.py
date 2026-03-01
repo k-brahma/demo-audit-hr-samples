@@ -22,6 +22,8 @@ class PortfolioApp(tk.Tk):
         self.title("株式ポートフォリオ 損益ダッシュボード")
         self.geometry("1100x680")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -52,10 +54,11 @@ class PortfolioApp(tk.Tk):
         left = ttk.Frame(pane)
         pane.add(left, weight=3)
         cols = ("銘柄名", "保有数", "平均取得単価", "現在価格", "評価額", "損益額", "損益率(%)", "配分(%)")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=18)
         widths = [130, 60, 110, 90, 100, 100, 80, 70]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.CENTER)
         self._tree.column("銘柄名", anchor=tk.W)
         self._tree.tag_configure("profit", foreground="#c0392b")
@@ -73,6 +76,47 @@ class PortfolioApp(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=right)
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._draw_empty_chart()
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "保有数":
+                try:
+                    return int(val.replace(",", ""))
+                except ValueError:
+                    return 0
+            if col in ("平均取得単価", "現在価格", "評価額", "損益額", "損益率(%)", "配分(%)"):
+                try:
+                    return float(val.replace("¥", "").replace(",", "").replace("%", "").replace("+", ""))
+                except ValueError:
+                    return 0.0
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -128,6 +172,7 @@ class PortfolioApp(tk.Tk):
                 ),
                 tags=(tag,),
             )
+        self._apply_sort()
 
     def _refresh_chart(self):
         self._ax.clear()

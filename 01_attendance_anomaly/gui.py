@@ -22,6 +22,8 @@ class AttendanceApp(tk.Tk):
         self.title("勤怠データ異常検知ツール")
         self.geometry("1000x640")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -50,10 +52,11 @@ class AttendanceApp(tk.Tk):
         pane.add(left, weight=1)
 
         cols = ("社員ID", "氏名", "部署", "年月", "月次残業時間", "ステータス")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=22)
         widths = [70, 80, 80, 90, 110, 80]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.CENTER)
         self._tree.tag_configure("正常", background="#d4edda")
         self._tree.tag_configure("警告", background="#fff3cd")
@@ -73,6 +76,46 @@ class AttendanceApp(tk.Tk):
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         self._draw_empty_chart()
+
+    _STATUS_ORDER = {"危険": 0, "警告": 1, "正常": 2}
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "月次残業時間":
+                try:
+                    return float(val.replace(" h", ""))
+                except ValueError:
+                    return 0.0
+            if col == "ステータス":
+                return self._STATUS_ORDER.get(val, 99)
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -97,19 +140,6 @@ class AttendanceApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("読み込みエラー", str(e))
 
-    def _refresh_tree(self):
-        self._tree.delete(*self._tree.get_children())
-        for _, row in self._df.iterrows():
-            tag = row["ステータス"]
-            self._tree.insert(
-                "", tk.END,
-                values=(
-                    row["社員ID"], row["氏名"], row["部署"], row["年月"],
-                    f"{row['月次残業時間']:.1f} h", row["ステータス"],
-                ),
-                tags=(tag,),
-            )
-
     def _refresh_chart(self):
         self._ax.clear()
         df = self._df.copy()
@@ -127,6 +157,20 @@ class AttendanceApp(tk.Tk):
         self._ax.legend(fontsize=8)
         self._fig.tight_layout()
         self._canvas.draw()
+
+    def _refresh_tree(self):
+        self._tree.delete(*self._tree.get_children())
+        for _, row in self._df.iterrows():
+            tag = row["ステータス"]
+            self._tree.insert(
+                "", tk.END,
+                values=(
+                    row["社員ID"], row["氏名"], row["部署"], row["年月"],
+                    f"{row['月次残業時間']:.1f} h", row["ステータス"],
+                ),
+                tags=(tag,),
+            )
+        self._apply_sort()
 
     def _save(self):
         if self._df is None:

@@ -24,6 +24,8 @@ class SalaryApp(tk.Tk):
         self.title("給与バンド分析ツール")
         self.geometry("1060x680")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -51,9 +53,10 @@ class SalaryApp(tk.Tk):
         pane.add(left, weight=1)
 
         cols = ("等級", "最小値", "最大値", "平均値", "中央値", "人数")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=20)
         for col in cols:
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=80, anchor=tk.CENTER)
         vsb = ttk.Scrollbar(left, orient=tk.VERTICAL, command=self._tree.yview)
         self._tree.configure(yscrollcommand=vsb.set)
@@ -67,6 +70,52 @@ class SalaryApp(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=right)
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._draw_empty_chart()
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "等級":
+                try:
+                    return int(val.replace("等級", ""))
+                except ValueError:
+                    return 0
+            if col in ("最小値", "最大値", "平均値", "中央値"):
+                try:
+                    return int(val.replace("万", "").replace(",", ""))
+                except ValueError:
+                    return 0
+            if col == "人数":
+                try:
+                    return int(val.replace("名", ""))
+                except ValueError:
+                    return 0
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -106,6 +155,7 @@ class SalaryApp(tk.Tk):
                     f"{int(row['人数'])}名",
                 ),
             )
+        self._apply_sort()
 
     def _refresh_chart(self):
         if self._df is None:

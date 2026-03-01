@@ -23,13 +23,17 @@ class MeetingCostApp(tk.Tk):
 
     def _build_ui(self):
         # プリセット
-        preset_frame = ttk.LabelFrame(self, text="プリセット", padding=8)
+        preset_frame = ttk.LabelFrame(self, text="プリセット（クリックで設定値を適用）", padding=8)
         preset_frame.pack(fill=tk.X, padx=16, pady=(12, 4))
         for preset in main.PRESETS:
+            label = (
+                f"{preset['名前']}\n"
+                f"{preset['人数']}名 / ¥{preset['時給']:,}/h"
+            )
             ttk.Button(
-                preset_frame, text=preset["名前"],
+                preset_frame, text=label,
                 command=lambda p=preset: self._apply_preset(p),
-            ).pack(side=tk.LEFT, padx=4)
+            ).pack(side=tk.LEFT, padx=4, pady=2)
 
         # 入力フォーム
         form = ttk.LabelFrame(self, text="会議設定", padding=12)
@@ -84,7 +88,10 @@ class MeetingCostApp(tk.Tk):
     def _apply_preset(self, preset: dict):
         self._participants.set(preset["人数"])
         self._hourly_rate.set(preset["時給"])
-        self._note_var.set(f"プリセット「{preset['名前']}」を適用（想定 {preset['分数']} 分）")
+        self._note_var.set(
+            f"「{preset['名前']}」を適用 ─ "
+            f"{preset['人数']}名 / ¥{preset['時給']:,}/h / 想定 {preset['分数']} 分"
+        )
 
     def _toggle(self):
         if self._running:

@@ -89,15 +89,17 @@ def get_latest_summary(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_results(df: pd.DataFrame) -> Path:
-    """結果をCSVに保存する。
+    """結果をCSVに保存する。達成率列がない場合は自動計算して付与する。
 
-    :param df: 保存する DataFrame
+    :param df: 保存する DataFrame（生データまたは達成率計算済みデータ）
     :type df: pd.DataFrame
     :return: 保存先パス
     :rtype: Path
     """
     RESULTS_DIR.mkdir(exist_ok=True)
     out = RESULTS_DIR / "kpi_report.csv"
+    if "達成率(%)" not in df.columns:
+        df = calculate_achievement(df)
     df.to_csv(out, index=False, encoding="utf-8-sig")
     return out
 

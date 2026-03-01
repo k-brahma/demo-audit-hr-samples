@@ -26,6 +26,8 @@ class RiskMatrixApp(tk.Tk):
         self.title("リスク評価マトリクス自動生成ツール")
         self.geometry("1100x700")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -66,10 +68,11 @@ class RiskMatrixApp(tk.Tk):
         left = ttk.Frame(pane)
         pane.add(left, weight=1)
         cols = ("リスクID", "分類", "リスク内容", "発生確率", "影響度", "スコア", "担当者")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=20)
         widths = [70, 70, 200, 70, 70, 60, 90]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.CENTER)
         self._tree.column("リスク内容", anchor=tk.W)
         self._tree.tag_configure("高", background="#f8d7da")
@@ -130,6 +133,8 @@ class RiskMatrixApp(tk.Tk):
         for var in self._form_vars.values():
             var.set("")
 
+    _INT_COLS = {"発生確率", "影響度", "スコア"}
+
     def _refresh_tree(self):
         self._tree.delete(*self._tree.get_children())
         for _, row in self._df.sort_values("リスクスコア", ascending=False).iterrows():
@@ -140,6 +145,43 @@ class RiskMatrixApp(tk.Tk):
                         row["発生確率"], row["影響度"], row["リスクスコア"], row["担当者"]),
                 tags=(level,),
             )
+        self._apply_sort()
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダーをクリックしたときの並べ替え処理。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在の _sort_col / _sort_reverse 状態でツリーを並べ替える。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col in self._INT_COLS:
+                try:
+                    return int(val)
+                except ValueError:
+                    return 0
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _refresh_chart(self):
         self._ax.clear()

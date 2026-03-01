@@ -25,6 +25,8 @@ class SurveyApp(tk.Tk):
         self.title("従業員サーベイ 結果集計・分析")
         self.geometry("1080x700")
         self._df = None
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
 
     def _build_ui(self):
@@ -63,9 +65,10 @@ class SurveyApp(tk.Tk):
         pane.add(left, weight=1)
 
         cols = ("設問名", "平均スコア")
+        self._cols = cols
         self._tree = ttk.Treeview(left, columns=cols, show="headings", height=18)
-        self._tree.heading("設問名", text="設問名")
-        self._tree.heading("平均スコア", text="平均スコア")
+        for col in cols:
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
         self._tree.column("設問名", width=160, anchor=tk.W)
         self._tree.column("平均スコア", width=90, anchor=tk.CENTER)
         self._tree.tag_configure("high", background="#d4edda")
@@ -83,6 +86,42 @@ class SurveyApp(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=right)
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._draw_empty_chart()
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダークリックで並べ替え。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        self._sort_reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        """現在のソート状態をツリーに適用する。"""
+        col = self._sort_col
+        if not col:
+            return
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "平均スコア":
+                try:
+                    return float(val)
+                except ValueError:
+                    return 0.0
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=self._sort_reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if self._sort_reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _draw_empty_chart(self):
         self._ax.clear()
@@ -125,6 +164,7 @@ class SurveyApp(tk.Tk):
                 values=(row["設問名"], f"{row['平均スコア']:.2f}"),
                 tags=(tag,),
             )
+        self._apply_sort()
 
     def _refresh_chart(self):
         if self._df is None:
@@ -136,7 +176,8 @@ class SurveyApp(tk.Tk):
             self._draw_radar_chart()
 
     def _draw_bar_chart(self):
-        self._ax.clear()
+        self._fig.clear()
+        self._ax = self._fig.add_subplot(111)
         q_df = main.aggregate_by_question(self._df)
         names = q_df["設問名"].tolist()
         scores = q_df["平均スコア"].tolist()
@@ -161,23 +202,21 @@ class SurveyApp(tk.Tk):
         angles += angles[:1]
 
         self._fig.clear()
-        ax = self._fig.add_subplot(111, polar=True)
+        self._ax = self._fig.add_subplot(111, polar=True)
 
         colors = plt.cm.Set1.colors
         for i, (_, row) in enumerate(dept_df.iterrows()):
             dept_name = row["部署"]
             values = [row[q] for q in q_labels]
             values += values[:1]
-            ax.plot(angles, values, "o-", linewidth=1.5, label=dept_name, color=colors[i % len(colors)])
-            ax.fill(angles, values, alpha=0.08, color=colors[i % len(colors)])
+            self._ax.plot(angles, values, "o-", linewidth=1.5, label=dept_name, color=colors[i % len(colors)])
+            self._ax.fill(angles, values, alpha=0.08, color=colors[i % len(colors)])
 
-        ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(q_labels, fontsize=8)
-        ax.set_ylim(0, 5)
-        ax.set_title("部署別 スコア比較（レーダー）", pad=16)
-        ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=8)
-        self._canvas = FigureCanvasTkAgg(self._fig, master=self._canvas.get_tk_widget().master)
-        self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self._ax.set_xticks(angles[:-1])
+        self._ax.set_xticklabels(q_labels, fontsize=8)
+        self._ax.set_ylim(0, 5)
+        self._ax.set_title("部署別 スコア比較（レーダー）", pad=16)
+        self._ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=8)
         self._fig.tight_layout()
         self._canvas.draw()
 

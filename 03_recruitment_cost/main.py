@@ -34,7 +34,7 @@ def calculate_cpa(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     df["CPA"] = df.apply(
-        lambda r: r["費用"] / r["採用数"] if r["採用数"] > 0 else 0, axis=1
+        lambda r: r["費用"] / r["採用数"] if r["採用数"] > 0 else float("nan"), axis=1
     )
     df["採用率(%)"] = df.apply(
         lambda r: round(r["採用数"] / r["応募数"] * 100, 1) if r["応募数"] > 0 else 0,

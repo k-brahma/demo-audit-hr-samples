@@ -15,6 +15,8 @@ class ChecklistApp(tk.Tk):
         super().__init__()
         self.title("内部統制チェックリスト")
         self.geometry("1000x660")
+        self._sort_col = ""
+        self._sort_reverse = False
         self._build_ui()
         self._refresh()
 
@@ -38,10 +40,11 @@ class ChecklistApp(tk.Tk):
 
         # Treeview
         cols = ("id", "カテゴリ", "チェック項目", "担当者", "優先度", "ステータス", "コメント")
+        self._cols = cols
         self._tree = ttk.Treeview(self, columns=cols, show="headings", height=24)
         widths = [40, 90, 320, 100, 60, 80, 200]
         for col, w in zip(cols, widths):
-            self._tree.heading(col, text=col)
+            self._tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self._tree.column(col, width=w, anchor=tk.W if w > 80 else tk.CENTER)
         self._tree.column("id", width=40, anchor=tk.CENTER)
 
@@ -78,6 +81,40 @@ class ChecklistApp(tk.Tk):
         self._prog_label.set(
             f"{prog['completed']} / {prog['total']} 完了  ({prog['rate']:.1f}%)"
         )
+
+    _PRIORITY_ORDER = {"高": 0, "中": 1, "低": 2}
+    _STATUS_ORDER = {"未着手": 0, "進行中": 1, "完了": 2, "該当なし": 3}
+
+    def _sort_by(self, col: str) -> None:
+        """カラムヘッダーをクリックしたときの並べ替え処理。
+
+        :param col: ソート対象カラム名
+        :type col: str
+        """
+        reverse = (self._sort_col == col) and not self._sort_reverse
+        self._sort_col = col
+        self._sort_reverse = reverse
+
+        def sort_key(item_id):
+            val = self._tree.set(item_id, col)
+            if col == "id":
+                return int(val) if val.isdigit() else 0
+            if col == "優先度":
+                return self._PRIORITY_ORDER.get(val, 99)
+            if col == "ステータス":
+                return self._STATUS_ORDER.get(val, 99)
+            return val.lower()
+
+        children = list(self._tree.get_children(""))
+        children.sort(key=sort_key, reverse=reverse)
+        for i, item_id in enumerate(children):
+            self._tree.move(item_id, "", i)
+
+        indicator = " ▼" if reverse else " ▲"
+        for c in self._cols:
+            base = c.rstrip(" ▲▼")
+            self._tree.heading(c, text=base + (indicator if c == col else ""),
+                               command=lambda x=c: self._sort_by(x))
 
     def _selected_id(self):
         sel = self._tree.selection()

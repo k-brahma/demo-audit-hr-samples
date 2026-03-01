@@ -19,13 +19,15 @@ DANGER_DAYS = 30
 WARNING_DAYS = 90
 
 
-def init_db() -> None:
+def init_db(db_path: Path = DB_PATH) -> None:
     """データベースを初期化し、サンプルデータを投入する。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :rtype: None
     """
-    DB_PATH.parent.mkdir(exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    db_path.parent.mkdir(exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS contracts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,14 +60,16 @@ def _seed_sample(conn: sqlite3.Connection) -> None:
     )
 
 
-def load_all() -> List[Dict[str, Any]]:
+def load_all(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     """全契約を残日数付きで返す。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :return: 契約情報リスト
     :rtype: List[Dict[str, Any]]
     """
     today = date.today()
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM contracts ORDER BY end_date").fetchall()
     result = []
@@ -89,7 +93,8 @@ def _urgency(days: int) -> str:
 
 
 def add_contract(name: str, counterparty: str, start_date: str,
-                 end_date: str, category: str, notes: str = "") -> None:
+                 end_date: str, category: str, notes: str = "",
+                 db_path: Path = DB_PATH) -> None:
     """契約を追加する。
 
     :param name: 契約名
@@ -98,32 +103,38 @@ def add_contract(name: str, counterparty: str, start_date: str,
     :param end_date: 終了日（YYYY-MM-DD）
     :param category: カテゴリ
     :param notes: 備考
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute(
             "INSERT INTO contracts (name, counterparty, start_date, end_date, category, notes) VALUES (?,?,?,?,?,?)",
             (name, counterparty, start_date, end_date, category, notes),
         )
 
 
-def delete_contract(contract_id: int) -> None:
+def delete_contract(contract_id: int, db_path: Path = DB_PATH) -> None:
     """契約を削除する。
 
     :param contract_id: 契約ID
     :type contract_id: int
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute("DELETE FROM contracts WHERE id=?", (contract_id,))
 
 
-def export_results() -> Path:
+def export_results(db_path: Path = DB_PATH) -> Path:
     """契約リストをCSVへエクスポートする。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :return: 出力ファイルパス
     :rtype: Path
     """
     import pandas as pd
     RESULTS_DIR.mkdir(exist_ok=True)
     out = RESULTS_DIR / "contracts_report.csv"
-    pd.DataFrame(load_all()).to_csv(out, index=False, encoding="utf-8-sig")
+    pd.DataFrame(load_all(db_path)).to_csv(out, index=False, encoding="utf-8-sig")
     return out

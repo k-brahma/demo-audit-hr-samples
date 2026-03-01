@@ -16,13 +16,15 @@ STATUS_OPTIONS = ["未着手", "進行中", "完了", "該当なし"]
 PRIORITY_OPTIONS = ["高", "中", "低"]
 
 
-def init_db() -> None:
+def init_db(db_path: Path = DB_PATH) -> None:
     """データベースを初期化し、サンプルデータを投入する。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :rtype: None
     """
-    DB_PATH.parent.mkdir(exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    db_path.parent.mkdir(exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS checklist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,13 +54,15 @@ def _seed_from_csv(conn: sqlite3.Connection) -> None:
             )
 
 
-def load_all() -> List[Dict[str, Any]]:
+def load_all(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     """全チェック項目を返す。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :return: チェック項目のリスト
     :rtype: List[Dict[str, Any]]
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT * FROM checklist ORDER BY priority DESC, category, id"
@@ -66,66 +70,78 @@ def load_all() -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def add_item(category: str, item: str, responsible: str, priority: str) -> None:
+def add_item(category: str, item: str, responsible: str, priority: str,
+             db_path: Path = DB_PATH) -> None:
     """チェック項目を追加する。
 
     :param category: カテゴリ
     :param item: チェック内容
     :param responsible: 担当者
     :param priority: 優先度
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute(
             "INSERT INTO checklist (category, item, responsible, priority) VALUES (?,?,?,?)",
             (category, item, responsible, priority),
         )
 
 
-def update_status(item_id: int, status: str, comment: str = "") -> None:
+def update_status(item_id: int, status: str, comment: str = "",
+                  db_path: Path = DB_PATH) -> None:
     """チェック項目のステータスを更新する。
 
     :param item_id: 項目ID
     :param status: 新しいステータス
     :param comment: コメント
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute(
             "UPDATE checklist SET status=?, comment=? WHERE id=?",
             (status, comment, item_id),
         )
 
 
-def delete_item(item_id: int) -> None:
+def delete_item(item_id: int, db_path: Path = DB_PATH) -> None:
     """チェック項目を削除する。
 
     :param item_id: 項目ID
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute("DELETE FROM checklist WHERE id=?", (item_id,))
 
 
-def get_progress() -> Dict[str, Any]:
+def get_progress(db_path: Path = DB_PATH) -> Dict[str, Any]:
     """進捗サマリーを返す。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :return: 総数・完了数・進捗率を含む辞書
     :rtype: Dict[str, Any]
     """
-    rows = load_all()
+    rows = load_all(db_path)
     total = len(rows)
     completed = sum(1 for r in rows if r["status"] in ("完了", "該当なし"))
     rate = (completed / total * 100) if total > 0 else 0.0
     return {"total": total, "completed": completed, "rate": rate}
 
 
-def export_results() -> Path:
+def export_results(db_path: Path = DB_PATH) -> Path:
     """チェックリストをCSVへエクスポートする。
 
+    :param db_path: データベースファイルパス
+    :type db_path: Path
     :return: 出力ファイルパス
     :rtype: Path
     """
     import pandas as pd
     RESULTS_DIR.mkdir(exist_ok=True)
     out = RESULTS_DIR / "checklist_report.csv"
-    rows = load_all()
+    rows = load_all(db_path)
     pd.DataFrame(rows).to_csv(out, index=False, encoding="utf-8-sig")
     return out
