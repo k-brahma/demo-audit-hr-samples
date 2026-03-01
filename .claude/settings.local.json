@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add README.md 01_attendance_anomaly/README.md 02_internal_control_checklist/README.md 03_recruitment_cost/README.md 04_portfolio_dashboard/README.md 05_salary_band_analysis/README.md 06_risk_matrix/README.md 07_meeting_cost_calculator/README.md 08_contract_deadline_manager/README.md 09_kpi_tracker/README.md 10_employee_survey/README.md)",
+      "Bash(git commit -m \"$\\(cat <<'EOF'\nremove job-hunting framing from all READMEs\n\nReplace 転職活動用/面接でのアピールポイント references with\nneutral wording across main README and all 10 sub-READMEs.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)"
+    ]
+  }
+}

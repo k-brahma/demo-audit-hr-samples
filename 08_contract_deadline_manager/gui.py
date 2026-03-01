@@ -33,6 +33,11 @@ class ContractApp(tk.Tk):
         self._sort_reverse = False
         self._build_ui()
         self._refresh()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self) -> None:
+        """ウィンドウ閉じるボタン押下時の後処理。"""
+        self.destroy()
 
     def _build_ui(self):
         # ツールバー

@@ -20,6 +20,13 @@ class MeetingCostApp(tk.Tk):
         self._elapsed = 0.0
         self._after_id = None
         self._build_ui()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self) -> None:
+        """ウィンドウ閉じるボタン押下時の後処理。"""
+        if self._after_id:
+            self.after_cancel(self._after_id)
+        self.destroy()
 
     def _build_ui(self):
         # プリセット
